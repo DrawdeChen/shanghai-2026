@@ -134,7 +134,7 @@ def build_data():
     for r in restaurants:
         if r['餐廳／美食'] in GENERIC_DISHES:
             continue
-        branch = r['區域／分店'].split('｜')[-1]  # "浙江中路店｜黃浦區浙江中路136號" -> the address part
+        branch = r['區域／分店'].split('｜')[-1]  # "某某店｜某某路1號" -> the address part
         addr = re.sub(r'\s+', '', branch) if re.search(r'\d\s*號', branch) else ''
         dests.append((r['餐廳／美食'], r['餐廳／美食'], ('上海市' + addr) if addr and not addr.startswith('上海') else addr, True))
     for a in attractions:

@@ -1,0 +1,4 @@
+# Plaintext trip data (contains booking codes and ticket numbers) — never commit
+data/
+dist/
+__pycache__/

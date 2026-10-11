@@ -42,12 +42,17 @@ STORIES = {
     '2026-10-18': '上海野生動物園 1995 年開園，由上海市政府與國家林業部門合作興建，是中國第一座國家級野生動物園。',
     '2026-10-19': '武康大樓是匈牙利建築師鄔達克 1924 年的作品，原名諾曼底公寓，因地塊只有 30 度夾角，大樓形似一艘船。下午經過的國際飯店也出自他手，1934 年落成、高 83.8 公尺，曾被譽為「遠東第一高樓」。',
 }
-# Places the itinerary sends us to by car that aren't restaurants or attractions in the sheet.
-EXTRA_DESTS = [
-    ('朱家角', '朱家角遊客中心', '上海市青浦區課植園路555號'),  # where the car drops us
-    ('十六鋪碼頭', '十六鋪碼頭', '上海市黃浦區'),
-    ('浦東T1', '上海浦東國際機場 T1 航站樓', ''),
-]
+# Extra places the itinerary sends us to (pier, visitor centre, airport…) that aren't restaurants or
+# attractions in the sheet. Kept in the gitignored data/ folder because together they trace our days.
+def _extra():
+    path = os.path.join(DATA, 'extra_dests.json')
+    if not os.path.exists(path):
+        return [], set()
+    x = json.load(open(path, encoding='utf-8'))
+    return [tuple(d) for d in x['dests']], set(x['in_brackets'])
+
+
+EXTRA_DESTS, EXTRA_IN_BRACKETS = _extra()
 # Chagee (霸王茶姬) stores come from the restaurant sheet; their 鄰近景點 tokens are matched against
 # each itinerary line. 飯店周邊 is shorthand for every "back to the hotel" line.
 TEA_PREFIX = '霸王茶姬'
@@ -130,7 +135,8 @@ def build_data():
 
     rest_names = set(names)
     # Destinations we can show a driver or paste into a ride-hailing app: (key found in text, name, address).
-    dests = [d + (False,) for d in EXTRA_DESTS]  # last field: also search the notes (restaurants only)
+    # last field: search the full text (restaurants, bracket-only places) instead of text minus （…）
+    dests = [d + (d[0] in EXTRA_IN_BRACKETS,) for d in EXTRA_DESTS]
     for r in restaurants:
         if r['餐廳／美食'] in GENERIC_DISHES:
             continue
@@ -199,7 +205,7 @@ def build_data():
                       if lines(row.get(col, '')) and lines(row.get(col, '')) != ['無']],
         })
 
-    flights = records('03_航班與交通')
+    flights = [f for f in records('03_航班與交通') if '航班' in f.get('類型', '')]
     hotels = records('04_住宿比較')
     add_maps(days, hotels, t2s)
 
@@ -285,10 +291,20 @@ def add_maps(days, hotels, t2s):
         if '迪士尼' in d['theme']:
             n += 1
             add('上海迪士尼樂園', str(n), '整天')
+        # A place's time is when we're there, not the "前往…" line that sends us there.
+        arrive = {}
+        for it in d['timeline']:
+            for p in it.get('dests', []):
+                if '前往' not in it['text'] or p['name'] not in arrive:
+                    arrive.setdefault(p['name'], None)
+                    if '前往' not in it['text'] and arrive[p['name']] is None:
+                        arrive[p['name']] = it['t'][:5]
         for it in d['timeline']:
             for p in it.get('dests', []):
                 if p['name'] in seen or p['name'] in unpinned:
                     continue
+                if '前往' in it['text'] and arrive.get(p['name']):
+                    continue  # numbered at the arrival line instead
                 if p['name'] in geo:
                     n += 1
                     add(p['name'], str(n), it['t'][:5])

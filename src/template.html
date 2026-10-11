@@ -1025,7 +1025,9 @@ function prepView(D) {
       }).join('') + '</ul></details>';
   }).join('');
   var budget = D.budget.map(function (b) {
-    return '<tr><td>' + esc(b['項目']) + '<small>' + esc(b['付款狀態']) + '</small></td><td>' + esc(b['實際幣別']) + ' ' + esc(b['實際金額']) + (b['實際幣別'] === 'CNY' ? '<small>' + twd(b['實際金額']) + '</small>' : '') + '</td></tr>';
+    var actual = !!b['實際金額'], cur = actual ? b['實際幣別'] : b['預算幣別'], amt = actual ? b['實際金額'] : b['預算金額'];
+    var state = b['付款狀態'] || (actual ? '' : '預算');
+    return '<tr><td>' + esc(b['項目']) + '<small>' + esc(state) + '</small></td><td>' + (actual ? '' : '<small style="display:inline;margin-right:4px">預算</small>') + esc(cur) + ' ' + esc(amt) + (cur === 'CNY' ? '<small>' + twd(amt) + '</small>' : '') + '</td></tr>';
   }).join('');
   return viewHead('BEFORE YOU GO', '行前清單') +
     '<div class="prepbar"><label><input type="checkbox" id="showdone"> 顯示已完成</label></div>' +

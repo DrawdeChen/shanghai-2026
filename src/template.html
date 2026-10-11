@@ -390,7 +390,7 @@ html.big .aa{background:var(--fa);color:#F7EFE6}
 .mzoom .bar{display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;border-bottom:1px solid var(--ln)}
 .mzoom .bar span{font-size:12px;letter-spacing:.2em;color:var(--ln)}
 .mzoom .sc{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
-.mzoom .sc svg{width:240vw;max-width:none;height:auto;display:block}
+.mzoom .sc svg{width:200vw;max-width:none;height:auto;display:block}
 .m-tea circle{fill:var(--card);stroke:var(--ok);stroke-width:1}.m-tea path{fill:none;stroke:var(--ok);stroke-width:1}
 .m-lead{stroke:var(--ln);stroke-width:.8;opacity:.7}.m-dot{fill:var(--ln)}
 .m-scale path{stroke:var(--ln);fill:none}.m-scale text,.m-north text{font-size:8px;fill:var(--ink2);text-anchor:middle}
@@ -405,6 +405,10 @@ html.big .aa{background:var(--fa);color:#F7EFE6}
 .mlegend small{margin-left:auto;font-size:10.5px;color:var(--ink2)}
 .munpin{margin:8px 14px 0;font-size:11.5px;color:var(--ink2)}
 .mbtn{display:flex;justify-content:center;padding:12px 0 14px}
+.pr.stars{font-size:12px;letter-spacing:.05em}
+.place .ft .kw{--fill:var(--card);font-size:11.5px;padding:4px 9px;gap:4px;margin-left:0}
+.place .ft .kw svg{width:11px;height:11px}
+.place .lc svg{display:inline-block;width:12px;height:12px;vertical-align:-2px}
 .pager{display:flex;justify-content:space-between;padding:6px 16px 0}
 .entries{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:22px 16px 0}
 .entry{display:flex;flex-direction:column;align-items:center;gap:7px;background:none;border:0;cursor:pointer;color:var(--ink);font-size:12px;letter-spacing:.12em;padding:0}
@@ -981,10 +985,29 @@ function foodView(D) {
       '<div class="lc">' + esc(a['區域']) + '　·　' + esc(a['類型']) + '　·　停留 ' + esc(a['建議停留']) + '</div>' +
       (a['推薦原因'] ? '<div class="must plain">' + esc(a['推薦原因']) + '</div>' : ''), a['景點名稱'].replace('＋', '／').split('／')[0]);
   }).join('');
-  return viewHead('DINING &amp; SIGHTS', '美食與景點') + tabs('food', ['已排入行程', '口袋名單', '景點']) +
+  var DL = D.delivery || {stores: [], rules: []};
+  var dlv = (DL.rules.length ? '<div class="boxes" style="padding:0 16px 12px"><details class="box"><summary><b>下單前看一下</b><span class="ct">' + DL.rules.length + '</span>' + ICON.down + '</summary><ul>' +
+      DL.rules.map(function (r) { return '<li><b class="gd" style="font-weight:500">' + esc(r.k) + '</b>　' + esc(r.v) + '</li>'; }).join('') + '</ul></details></div>' : '') +
+    '<div class="list">' + DL.stores.map(function (x) {
+      var pick_ = x['你的評選'] || '未評選';
+      var kws = (x['搜尋關鍵字'] || '').split('／').map(function (k) { return k.trim(); }).filter(Boolean);
+      var src = x['來源／查核'] || '';
+      return '<div class="place chf" data-x><div class="nm">' + esc(x['店家／品牌']) + cue() + '</div><div class="pr stars">' + esc(x['優先級']) + '</div>' +
+        '<div class="lc">' + esc(x['類型']) + '</div>' +
+        '<div class="ex"><div class="must">' + esc(x['必點品項']) + '</div>' +
+        '<div class="lc" style="margin-top:6px">' + esc(x['推薦原因']) + '</div>' +
+        '<div class="lc">耐外送：' + esc(x['耐外送']) + '　·　' + esc(x['適合情境']) + '</div>' +
+        (x['下單提醒'] ? '<div class="lc" style="color:var(--warn)">' + ICON.alert + ' ' + esc(x['下單提醒']) + '</div>' : '') +
+        '<div class="ft"><span class="tag chf ' + (pick_ === '想吃' ? 'gold' : 'no') + '">' + esc(pick_) + '</span>' +
+        kws.map(function (k) { return '<button type="button" class="btn chf ghost kw" data-copy="' + esc(k) + '">' + ICON.copy + esc(k) + '</button>'; }).join('') + '</div>' +
+        (/^https?:/.test(src) ? '<div class="lc" style="margin-top:6px"><a class="gd" href="' + esc(src) + '" target="_blank" rel="noopener">資料來源 ↗</a></div>' : src ? '<div class="lc" style="margin-top:6px">' + esc(src) + '</div>' : '') +
+        '</div></div>';
+    }).join('') + '</div>';
+  return viewHead('DINING &amp; SIGHTS', '美食與景點') + tabs('food', ['已排入', '口袋名單', '景點', '外送']) +
     pane('food', 0, '<div class="list">' + planHTML + '</div>') +
     pane('food', 1, '<div class="list">' + rest.map(rcard).join('') + '</div>') +
-    pane('food', 2, '<div class="list">' + spots + '</div>');
+    pane('food', 2, '<div class="list">' + spots + '</div>') +
+    pane('food', 3, dlv);
 }
 
 /* ── Checklist ─────────────────────────────────────────── */
@@ -1146,7 +1169,10 @@ function render(D) {
       var z = $('#mzoom'), sc = $('.sc', z);
       sc.innerHTML = mp.querySelector('svg').outerHTML;
       z.classList.add('show');
-      sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2; sc.scrollTop = (sc.scrollHeight - sc.clientHeight) / 2;
+      // centre the view on the day's markers rather than the middle of the map
+      var pins = sc.querySelectorAll('.m-pin, .m-stay'), box = sc.getBoundingClientRect(), cx = 0, cy = 0;
+      pins.forEach(function (g) { var r = g.getBoundingClientRect(); cx += r.left + r.width / 2 - box.left + sc.scrollLeft; cy += r.top + r.height / 2 - box.top + sc.scrollTop; });
+      if (pins.length) { sc.scrollLeft = cx / pins.length - sc.clientWidth / 2; sc.scrollTop = cy / pins.length - sc.clientHeight / 2; }
       return;
     }
     if (t.closest('[data-mclose]')) return $('#mzoom').classList.remove('show');

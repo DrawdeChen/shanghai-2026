@@ -90,7 +90,7 @@ def timeline(day):
                 start, end, mod, text = m.groups()
                 key = minutes(start[:5].rstrip('／/或'))
                 items.append({'t': start, 'e': end or '', 'mod': mod or '', 'text': text,
-                              'kind': 'meal' if re.search('早餐|午餐|晚餐', text) else kind, 'notes': [], 'k': key})
+                              'kind': 'meal' if re.search('早餐|午餐|晚餐', text) and '取' not in text else kind, 'notes': [], 'k': key})
             elif ev:
                 label, end, text = ev.groups()
                 key = minutes(end) - 1
@@ -134,7 +134,7 @@ def build_data():
     for r in restaurants:
         if r['餐廳／美食'] in GENERIC_DISHES:
             continue
-        branch = r['區域／分店']
+        branch = r['區域／分店'].split('｜')[-1]  # "浙江中路店｜黃浦區浙江中路136號" -> the address part
         addr = re.sub(r'\s+', '', branch) if re.search(r'\d\s*號', branch) else ''
         dests.append((r['餐廳／美食'], r['餐廳／美食'], ('上海市' + addr) if addr and not addr.startswith('上海') else addr, True))
     for a in attractions:
@@ -168,7 +168,8 @@ def build_data():
         # Places only count when the item itself names them; notes often say "skip X".
         found, seen = [], set()
         for key, name, addr, in_notes in dests:
-            hay = text + notes if in_notes else text
+            # Branch names in brackets ("（外灘外白渡橋店）") mention landmarks we aren't visiting.
+            hay = text + notes if in_notes else re.sub(r'（[^）]*）', '', text)
             if key in hay and name not in seen and not any(key in f['name'] for f in found):
                 seen.add(name)
                 found.append({'name': name, 'addr': addr, 's': t2s(name), 'sa': t2s(addr),
@@ -238,8 +239,25 @@ def build_data():
         'attractions': attractions,
         'restaurants': restaurants,
         'todos': todos,
+        'delivery': delivery(),
         'budget': records('07_預算與支出'),
     }
+
+
+def delivery():
+    """12_外送專區: store rows, then a '下單原則' key/value block."""
+    rows = load('12_外送專區')
+    head, stores, rules, in_rules = rows[0], [], [], False
+    for r in rows[1:]:
+        if r[0] == '下單原則':
+            in_rules = True
+        elif in_rules:
+            rules.append({'k': r[0], 'v': r[1] if len(r) > 1 else ''})
+        else:
+            stores.append({h: (r[i] if i < len(r) else '') for i, h in enumerate(head) if h})
+    rank = {'想吃': 0, '可選': 1, '': 2}
+    stores.sort(key=lambda x: (rank.get(x.get('你的評選', ''), 3), -x.get('優先級', '').count('★')))
+    return {'stores': [x for x in stores if x.get('你的評選') != '不吃'], 'rules': rules}
 
 
 def add_maps(days, hotels, t2s):

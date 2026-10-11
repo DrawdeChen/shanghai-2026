@@ -101,6 +101,15 @@ out geom;'''
             except Exception as ex:  # busy servers are common; rotate and retry
                 last = ex
                 time.sleep(10 + 10 * attempt)
+    # Overpass is often overloaded. Fall back to features already cached for neighbouring maps.
+    feats = []
+    for name in os.listdir(CACHE_DIR) if os.path.isdir(CACHE_DIR) else []:
+        for f in json.load(open(os.path.join(CACHE_DIR, name), encoding='utf-8')):
+            if any(s <= la <= n and w <= lo <= e for la, lo in f['g']):
+                feats.append(f)
+    if feats:
+        print(f'Overpass unavailable ({last}); reused {len(feats)} cached features for {bbox}')
+        return feats
     raise RuntimeError(f'Overpass failed for {bbox}: {last}')
 
 

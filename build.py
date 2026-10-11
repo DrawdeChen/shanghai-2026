@@ -5,6 +5,7 @@
 """
 import argparse
 import base64
+import unicodedata
 import csv
 import datetime as dt
 import getpass
@@ -28,20 +29,9 @@ EVENT_RE = re.compile(rf'^(\S{{1,4}}[後前])\s*[–\-]\s*({_T})\s*(.*)$')
 GENERIC_DISHES = {'蔥油拌麵', '排骨年糕'}
 SECTIONS = [('起床／出發', 'start'), ('上午行程', 'am'), ('午餐', 'meal'),
             ('下午行程', 'pm'), ('晚餐', 'meal'), ('夜間行程', 'night')]
-# Cards to show staff. Traditional for us, Simplified (via OpenCC) for them.
+# Card to show staff in an emergency. Traditional for us, Simplified (via OpenCC) for them.
 PHRASES = [
-    ('人數', '我們三位，兩個大人一個小孩'),
-    ('訂位', '我們有訂位，姓陳'),
-    ('兒童椅', '請給我們一張兒童椅，謝謝'),
-    ('不辣', '請不要放辣'),
-    ('小孩吃', '小孩要吃，請少油少鹽'),
-    ('打包', '請幫我們打包，謝謝'),
-    ('買單', '請幫我們買單'),
-    ('洗手間', '請問洗手間在哪裡？'),
-    ('等多久', '請問大概要等多久？'),
-    ('付款', '可以用支付寶或微信支付嗎？'),
-    ('孩子走失', '我們的孩子走失了，三歲男孩，請幫忙聯絡工作人員'),
-    ('身體不適', '小孩身體不舒服，請問附近有醫務室或醫院嗎？'),
+    ('孩子走失', '我們的孩子走失了，三歲男孩，請幫忙廣播或聯絡工作人員'),
 ]
 # Checked against public sources on 2026-10-11 (see conversation notes).
 STORIES = {
@@ -52,6 +42,13 @@ STORIES = {
     '2026-10-18': '上海野生動物園 1995 年開園，由上海市政府與國家林業部門合作興建，是中國第一座國家級野生動物園。',
     '2026-10-19': '武康大樓是匈牙利建築師鄔達克 1924 年的作品，原名諾曼底公寓，因地塊只有 30 度夾角，大樓形似一艘船。下午經過的國際飯店也出自他手，1934 年落成、高 83.8 公尺，曾被譽為「遠東第一高樓」。',
 }
+# Places the itinerary sends us to by car that aren't restaurants or attractions in the sheet.
+EXTRA_DESTS = [
+    ('朱家角', '朱家角遊客中心', '上海市青浦區課植園路555號'),  # where the car drops us
+    ('十六鋪碼頭', '十六鋪碼頭', '上海市黃浦區'),
+    ('浦東T1', '上海浦東國際機場 T1 航站樓', ''),
+    ('上海老飯店', '上海老飯店', ''),
+]
 INFO_BOXES = [('交通安排', '交通'), ('必須預約／確認', '預約與確認'), ('親子／休息', '親子與休息'),
               ('可取消項目', '可取消'), ('延誤處理', '延誤時')]
 
@@ -118,10 +115,43 @@ def build_data():
             label = r[2].split('、')[0]
             short[r[0]] = label[2:] if label.startswith('上海') and len(label) > 3 else label
 
+    # Mainland drivers and Amap search expect Simplified Chinese.
+    from opencc import OpenCC
+    t2s = OpenCC('t2s').convert
+
     days = []
     todos = records('08_行前準備')
     restaurants = [r for r in records('06_餐廳與美食') if r.get('你的評選') in ('想吃', '可選')]
+    attractions = [a for a in records('05_景點候選') if a.get('你的評選') in ('想去', '可選')]
     names = [r['餐廳／美食'] for r in restaurants if r['餐廳／美食'] not in GENERIC_DISHES]
+
+    # Destinations we can show a driver or paste into a ride-hailing app: (key found in text, name, address).
+    dests = [d + (False,) for d in EXTRA_DESTS]  # last field: also search the notes (restaurants only)
+    for r in restaurants:
+        if r['餐廳／美食'] in GENERIC_DISHES:
+            continue
+        branch = r['區域／分店']
+        addr = re.sub(r'\s+', '', branch) if re.search(r'\d\s*號', branch) else ''
+        dests.append((r['餐廳／美食'], r['餐廳／美食'], ('上海市' + addr) if addr and not addr.startswith('上海') else addr, True))
+    for a in attractions:
+        for part in re.split('[／＋]', a['景點名稱']):
+            part = part.replace('精華段', '').strip()
+            dests.append((part, part, '', False))
+            for tail in ('塔', '古鎮'):
+                if part.endswith(tail) and len(part) > len(tail) + 1:
+                    dests.append((part[:-len(tail)], part, '', False))
+    dests.sort(key=lambda x: -len(x[0]))
+
+    def find_dests(text, notes):
+        # Places only count when the item itself names them; notes often say "skip X".
+        found, seen = [], set()
+        for key, name, addr, in_notes in dests:
+            hay = text + notes if in_notes else text
+            if key in hay and name not in seen and not any(key in f['name'] for f in found):
+                seen.add(name)
+                found.append({'name': name, 'addr': addr, 's': t2s(name), 'sa': t2s(addr)})
+        return found[:2]
+
     for row in records('02_每日行程'):
         d, md = short_date(row['日期'])
         bookings = [{'what': t['待辦事項'], 'status': t['狀態'], 'detail': t['重要資料／編號'], 'note': t['備註']}
@@ -130,6 +160,7 @@ def build_data():
         for item in tl:
             blob = item['text'] + ' '.join(item['notes'])
             item['places'] = [n for n in names if len(n) >= 2 and n in blob][:2]
+            item['dests'] = find_dests(item['text'], ' '.join(item['notes']))
         days.append({
             'date': d.isoformat(), 'md': md, 'dow': row['星期'], 'theme': row['當日主題'],
             'short': short.get(row['日期'], row['當日主題'].split('、')[0]),
@@ -161,10 +192,6 @@ def build_data():
         elif mode == 'rules':
             rules.append({'case': r[0], 'rule': r[1]})
 
-    # Mainland drivers and Amap search expect Simplified Chinese.
-    from opencc import OpenCC
-    t2s = OpenCC('t2s').convert
-    attractions = [a for a in records('05_景點候選') if a.get('你的評選') in ('想去', '可選')]
     terms = {r['餐廳／美食'] for r in restaurants} | {a['景點名稱'].replace('＋', '／').split('／')[0] for a in attractions}
     terms |= {h['飯店名稱'] for h in hotels} | {'上海市' + h['區域'] for h in hotels} | {'師傅，請送我們到', '謝謝！'}
     sc = {t: t2s(t) for t in terms}
@@ -198,6 +225,12 @@ def fetch_rate():
         return None
 
 
+def normalize(password: str) -> str:
+    # Full-width letters from a Chinese IME (ａｂｃ１２３) and stray spaces are the usual reason a
+    # password typed in the terminal "doesn't match" the phone. The page applies the same rule.
+    return unicodedata.normalize('NFKC', password).strip()
+
+
 def encrypt(plaintext: bytes, password: str) -> dict:
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -212,7 +245,7 @@ def encrypt(plaintext: bytes, password: str) -> dict:
         with open(salt_file, 'w') as f:
             f.write(base64.b64encode(salt).decode())
     iv = os.urandom(12)
-    key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=PBKDF2_ITERATIONS).derive(password.encode())
+    key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=PBKDF2_ITERATIONS).derive(normalize(password).encode())
     ct = AESGCM(key).encrypt(iv, plaintext, None)
     b64 = lambda b: base64.b64encode(b).decode()
     return {'salt': b64(salt), 'iv': b64(iv), 'ct': b64(ct), 'iter': PBKDF2_ITERATIONS}
@@ -236,10 +269,10 @@ def main():
         out = os.path.join(ROOT, 'dist', 'preview.html')
         payload = f'window.TRIP_PLAIN = {data};'
     else:
-        pw = getpass.getpass('Password: ')
+        pw = normalize(getpass.getpass('Password: '))
         if len(pw) < 8:
             sys.exit('Use at least 8 characters.')
-        if getpass.getpass('Repeat:   ') != pw:
+        if normalize(getpass.getpass('Repeat:   ')) != pw:
             sys.exit('Passwords do not match.')
         out = os.path.join(ROOT, 'docs', 'index.html')
         payload = f'window.TRIP_SEALED = {json.dumps(encrypt(data.encode(), pw))};'

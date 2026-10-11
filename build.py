@@ -47,8 +47,11 @@ EXTRA_DESTS = [
     ('朱家角', '朱家角遊客中心', '上海市青浦區課植園路555號'),  # where the car drops us
     ('十六鋪碼頭', '十六鋪碼頭', '上海市黃浦區'),
     ('浦東T1', '上海浦東國際機場 T1 航站樓', ''),
-    ('上海老飯店', '上海老飯店', ''),
 ]
+# Chagee (霸王茶姬) stores come from the restaurant sheet; their 鄰近景點 tokens are matched against
+# each itinerary line. 飯店周邊 is shorthand for every "back to the hotel" line.
+TEA_PREFIX = '霸王茶姬'
+TEA_ALIASES = {'飯店周邊': ['返回飯店', '回飯店', '人民廣場飯店']}
 INFO_BOXES = [('交通安排', '交通'), ('必須預約／確認', '預約與確認'), ('親子／休息', '親子與休息'),
               ('可取消項目', '可取消'), ('延誤處理', '延誤時')]
 
@@ -123,8 +126,9 @@ def build_data():
     todos = records('08_行前準備')
     restaurants = [r for r in records('06_餐廳與美食') if r.get('你的評選') in ('想吃', '可選')]
     attractions = [a for a in records('05_景點候選') if a.get('你的評選') in ('想去', '可選')]
-    names = [r['餐廳／美食'] for r in restaurants if r['餐廳／美食'] not in GENERIC_DISHES]
+    names = [r['餐廳／美食'] for r in restaurants if r['餐廳／美食'] not in GENERIC_DISHES and not r['餐廳／美食'].startswith(TEA_PREFIX)]
 
+    rest_names = set(names)
     # Destinations we can show a driver or paste into a ride-hailing app: (key found in text, name, address).
     dests = [d + (False,) for d in EXTRA_DESTS]  # last field: also search the notes (restaurants only)
     for r in restaurants:
@@ -142,6 +146,24 @@ def build_data():
                     dests.append((part[:-len(tail)], part, '', False))
     dests.sort(key=lambda x: -len(x[0]))
 
+    teas = sorted([r for r in restaurants if r['餐廳／美食'].startswith(TEA_PREFIX)],
+                  key=lambda r: r.get('你的評選') != '想吃')
+
+    def find_tea(text):
+        hits = []
+        for r in teas:
+            keys = []
+            for tok in re.split('[／/、]', r.get('鄰近景點', '')):
+                tok = tok.strip()
+                keys += TEA_ALIASES.get(tok, [tok] if len(tok) >= 2 else [])
+            if any(k in text for k in keys):
+                name = r['餐廳／美食']
+                branch = re.sub(r'^.*[（(](.+?)[）)].*$', lambda m: m.group(1), name)
+                addr = re.sub(r'\s+', '', r['區域／分店']) if re.search(r'\d\s*號', r['區域／分店']) else ''
+                hits.append({'name': name, 'branch': branch, 'addr': addr,
+                             's': t2s(name), 'sa': t2s(('上海市' + addr) if addr and not addr.startswith('上海') else addr)})
+        return hits[:2]
+
     def find_dests(text, notes):
         # Places only count when the item itself names them; notes often say "skip X".
         found, seen = [], set()
@@ -149,7 +171,8 @@ def build_data():
             hay = text + notes if in_notes else text
             if key in hay and name not in seen and not any(key in f['name'] for f in found):
                 seen.add(name)
-                found.append({'name': name, 'addr': addr, 's': t2s(name), 'sa': t2s(addr)})
+                found.append({'name': name, 'addr': addr, 's': t2s(name), 'sa': t2s(addr),
+                              'food': name in rest_names})
         return found[:2]
 
     for row in records('02_每日行程'):
@@ -161,6 +184,11 @@ def build_data():
             blob = item['text'] + ' '.join(item['notes'])
             item['places'] = [n for n in names if len(n) >= 2 and n in blob][:2]
             item['dests'] = find_dests(item['text'], ' '.join(item['notes']))
+            item['tea'] = [] if re.match(r'^(叫車)?前往', item['text']) else find_tea(item['text'])
+        # Don't repeat the same hint on consecutive lines (陸家嘴 → 東方明珠).
+        for prev, cur in zip(tl, tl[1:]):
+            if cur['tea'] and [t['name'] for t in cur['tea']] == [t['name'] for t in prev.get('tea', [])]:
+                cur['tea'] = []
         days.append({
             'date': d.isoformat(), 'md': md, 'dow': row['星期'], 'theme': row['當日主題'],
             'short': short.get(row['日期'], row['當日主題'].split('、')[0]),
@@ -270,6 +298,8 @@ def main():
         payload = f'window.TRIP_PLAIN = {data};'
     else:
         pw = normalize(getpass.getpass('Password: '))
+        if not pw.isascii() or not pw.isprintable():
+            sys.exit('密碼含有英數字以外的字元（可能是注音輸入法）。請切到英文輸入法再試一次。')
         if len(pw) < 8:
             sys.exit('Use at least 8 characters.')
         if normalize(getpass.getpass('Repeat:   ')) != pw:
@@ -284,6 +314,8 @@ def main():
     for name in os.listdir(static):
         shutil.copy(os.path.join(static, name), os.path.dirname(out))
     print(f'wrote {os.path.relpath(out, ROOT)} ({os.path.getsize(out) // 1024} KB)')
+    if not args.preview:
+        print(f'密碼長度：{len(pw)} 個字元（請確認和你想設定的一樣）')
 
 
 if __name__ == '__main__':

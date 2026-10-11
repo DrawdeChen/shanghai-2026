@@ -362,6 +362,11 @@ html.big .aa{background:var(--fa);color:#F7EFE6}
 .toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translate(-50%,10px);z-index:45;background:var(--ink);color:var(--bg);
   padding:8px 16px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:86vw;text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
+.tea-i{display:inline-flex;vertical-align:-1px;margin-left:6px;color:var(--ok);opacity:.75}
+.tea-i svg{width:12px;height:12px}
+.tea-h{margin-top:10px;font-size:11px;letter-spacing:.3em;color:var(--ok)}
+.tea-d{border-color:var(--okbg)}
+.dest .dn svg{width:13px;height:13px;vertical-align:-2px}
 .pager{display:flex;justify-content:space-between;padding:6px 16px 0}
 .entries{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:22px 16px 0}
 .entry{display:flex;flex-direction:column;align-items:center;gap:7px;background:none;border:0;cursor:pointer;color:var(--ink);font-size:12px;letter-spacing:.12em;padding:0}
@@ -386,6 +391,7 @@ html.big .aa{background:var(--fa);color:#F7EFE6}
 .stops{margin-top:12px}
 .place{grid-template-columns:1fr auto}
 .place .ex{grid-column:1/-1}
+.when-tag{grid-column:1/-1;font-family:var(--deco);font-size:12.5px;color:var(--ln);letter-spacing:.06em;margin-top:2px}
 .must.plain{color:var(--ink2)}
 .must.plain::before{content:""}
 .prepbar{display:flex;justify-content:flex-end;padding:0 16px 8px;font-size:12px;color:var(--ink2)}
@@ -615,6 +621,7 @@ var ICON = {
   map: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 15s5-4.6 5-8.5A5 5 0 0 0 3 6.5C3 10.4 8 15 8 15Z"/><path d="M8 4.5L10 6.5L8 8.5L6 6.5Z"/></svg>',
   car: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 11V8l2-4h8l2 4v3H2Z"/><path d="M2 8h12"/><circle cx="5" cy="11.5" r="1.3"/><circle cx="11" cy="11.5" r="1.3"/></svg>',
   tel: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 2h3l1.5 3.5-2 1.2a8 8 0 0 0 3.8 3.8l1.2-2L14 10v3a1 1 0 0 1-1 1A11 11 0 0 1 2 3a1 1 0 0 1 1-1Z"/></svg>',
+  tea: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 5H12L11 15H5Z"/><path d="M3.5 5H12.5M8 5L9.5 1"/><path d="M4.6 9H11.4"/></svg>',
   copy: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5 5V2.5H13.5V11H11"/><path d="M2.5 5H11V13.5H2.5Z"/></svg>',
   arrow: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 8h10M9 4l4 4-4 4"/></svg>',
   down: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 6l4 4 4-4"/></svg>',
@@ -803,13 +810,22 @@ function dayHTML(D, d, i, N, food) {
         '<button type="button" class="btn chf ghost" data-copy="' + esc(p.s) + '">' + ICON.copy + '複製</button>' +
         '<a class="btn chf ghost" href="' + amap(p.s) + '" target="_blank" rel="noopener">' + ICON.map + '高德</a></div></div>';
     }).join('');
-    var more = it.notes.map(function (n) { return '<div class="note">' + metro(esc(n)) + '</div>'; }).join('') + places;
+    var teaBox = (it.tea || []).map(function (p) {
+      var j = DESTS.push(p) - 1;
+      return '<div class="dest tea-d"><div class="dn">' + ICON.tea + ' ' + esc(p.branch) + (p.addr ? '<span>' + esc(p.addr) + '</span>' : '') + '</div>' +
+        '<div class="db"><button type="button" class="btn chf" data-dest="' + j + '">' + ICON.car + '給司機看</button>' +
+        '<button type="button" class="btn chf ghost" data-copy="' + esc(p.s) + '">' + ICON.copy + '複製</button>' +
+        '<a class="btn chf ghost" href="' + amap(p.s) + '" target="_blank" rel="noopener">' + ICON.map + '高德</a></div></div>';
+    }).join('');
+    var teaIcon = (it.tea || []).length ? '<span class="tea-i" aria-label="附近有霸王茶姬">' + ICON.tea + '</span>' : '';
+    if (teaBox) teaBox = '<div class="tea-h">附近的霸王茶姬</div>' + teaBox;
+    var more = it.notes.map(function (n) { return '<div class="note">' + metro(esc(n)) + '</div>'; }).join('') + places + teaBox;
     var cls = it.kind + (isToday && k < cur ? ' past' : '') + (isToday && k === cur ? ' now' : '') + (more ? ' has' : '');
     var t = it.t ? esc(it.t).replace(/[／/或]/, '<br>') : '';
     var tm = '<div class="t">' + (it.t ? t : '<span style="font-size:11px">—</span>') + (it.e ? '<small>' + esc(it.e) + '</small>' : '') + (it.mod ? '<em>' + esc(it.mod) + '</em>' : '') + '</div>';
     return '<li class="' + cls + '"' + (more ? ' data-x' : '') + '>' + tm + '<div class="nd"><i></i></div><div class="x">' +
       (it.kind === 'meal' ? '<span class="mealtag">DINING</span>' : '') +
-      '<div class="h">' + metro(esc(it.text)) + (more ? cue() : '') + '</div>' + (more ? '<div class="ex">' + more + '</div>' : '') + '</div></li>';
+      '<div class="h">' + metro(esc(it.text)) + teaIcon + (more ? cue() : '') + '</div>' + (more ? '<div class="ex">' + more + '</div>' : '') + '</div></li>';
   }).join('');
   var boxes = d.boxes.map(function (b) {
     return '<details class="box"><summary><b>' + b.title + '</b><span class="ct">' + b.items.length + '</span>' + ICON.down + '</summary><ul>' +
@@ -874,26 +890,48 @@ function disneyView(D) {
 
 /* ── Food & sights ─────────────────────────────────────── */
 function foodView(D) {
-  var planned = D.days.map(function (d) { return d.timeline.map(function (t) { return t.text + t.notes.join(''); }).join(''); }).join('');
-  function card(name, price, pick_, lines, mapKw) {
+  function card(name, price, pick_, lines, mapKw, when) {
     return '<div class="place chf" data-x><div class="nm">' + esc(name) + cue() + '</div><div class="pr"' + (/\d/.test(price) ? ' data-fx="' + esc(price) + '"' : '') + '>' + esc(price) + '<small>' + twd(price) + '</small></div>' +
+      (when ? '<div class="when-tag">' + when + '</div>' : '') +
       '<div class="ex">' + lines + '<div class="ft"><span class="tag chf ' + (/想/.test(pick_) ? 'gold' : 'no') + '">' + esc(pick_) + '</span>' +
       '<a href="' + amap(mapKw) + '" target="_blank" rel="noopener">' + ICON.map + '高德</a></div></div></div>';
   }
-  function rcard(r) {
+  function rcard(r, when) {
     return card(r['餐廳／美食'], r['三人預估餐費（CNY）'], r['你的評選'],
       '<div class="lc">' + esc(r['類型']) + '　·　' + esc(r['區域／分店']) + '</div>' + (r['必點餐點'] ? '<div class="must">' + esc(r['必點餐點']) + '</div>' : '') +
-      (r['需訂位'] ? '<div class="lc">訂位：' + esc(r['需訂位']) + '</div>' : ''), r['餐廳／美食']);
+      (r['需訂位'] ? '<div class="lc">訂位：' + esc(r['需訂位']) + '</div>' : ''), r['餐廳／美食'], typeof when === 'string' ? when : '');
   }
-  var inPlan = D.restaurants.filter(function (r) { return planned.indexOf(r['餐廳／美食']) >= 0; });
-  var rest = D.restaurants.filter(function (r) { return planned.indexOf(r['餐廳／美食']) < 0; });
+  // "Planned" comes from the itinerary itself, in date order, so places missing from the restaurant sheet still show.
+  // A place can appear twice ("前往李百蟹" then the meal itself); keep the meal occurrence.
+  var byName = {}, seen = {}, hits = [], planHTML = '';
+  D.restaurants.forEach(function (r) { byName[r['餐廳／美食']] = r; });
+  D.days.forEach(function (d, di) {
+    d.timeline.forEach(function (it, k) {
+      (it.dests || []).forEach(function (p) {
+        if (!p.food) return;
+        var h = {p: p, d: d, it: it, order: di * 1000 + k, meal: it.kind === 'meal'};
+        var prev = seen[p.name];
+        if (!prev) { seen[p.name] = h; hits.push(h); }
+        else if (!prev.meal && h.meal) { hits[hits.indexOf(prev)] = h; seen[p.name] = h; }
+      });
+    });
+  });
+  hits.sort(function (a, b) { return a.order - b.order; }).forEach(function (h) {
+    var it = h.it, d = h.d, p = h.p;
+    var meal = /早餐/.test(it.text) || /^0\d/.test(it.t) ? '早餐' : /午餐/.test(it.text) || h.meal && /^1[1-3]/.test(it.t) ? '午餐' : /晚餐/.test(it.text) || h.meal && /^1[7-9]/.test(it.t) ? '晚餐' : '順路';
+    if (it.text.indexOf(p.name) < 0 && /備選/.test(it.notes.join(''))) meal += '（備選）';
+    var when = d.md + '（' + d.dow + '）' + (it.t ? ' ' + esc(it.t.slice(0, 5)) : '') + ' · ' + meal;
+    var r = byName[p.name];
+    planHTML += r ? rcard(r, when) : card(p.name, '', '已排入行程', it.notes.map(function (n) { return '<div class="lc">' + esc(n) + '</div>'; }).join(''), p.name, when);
+  });
+  var rest = D.restaurants.filter(function (r) { return !seen[r['餐廳／美食']]; });
   var spots = D.attractions.map(function (a) {
     return card(a['景點名稱'], a['三人預估費用（CNY）'], a['你的評選'],
       '<div class="lc">' + esc(a['區域']) + '　·　' + esc(a['類型']) + '　·　停留 ' + esc(a['建議停留']) + '</div>' +
       (a['推薦原因'] ? '<div class="must plain">' + esc(a['推薦原因']) + '</div>' : ''), a['景點名稱'].replace('＋', '／').split('／')[0]);
   }).join('');
   return viewHead('DINING &amp; SIGHTS', '美食與景點') + tabs('food', ['已排入行程', '口袋名單', '景點']) +
-    pane('food', 0, '<div class="list">' + inPlan.map(rcard).join('') + '</div>') +
+    pane('food', 0, '<div class="list">' + planHTML + '</div>') +
     pane('food', 1, '<div class="list">' + rest.map(rcard).join('') + '</div>') +
     pane('food', 2, '<div class="list">' + spots + '</div>');
 }

@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import sys
+import urllib.request
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, 'data')
@@ -27,6 +28,30 @@ EVENT_RE = re.compile(rf'^(\S{{1,4}}[後前])\s*[–\-]\s*({_T})\s*(.*)$')
 GENERIC_DISHES = {'蔥油拌麵', '排骨年糕'}
 SECTIONS = [('起床／出發', 'start'), ('上午行程', 'am'), ('午餐', 'meal'),
             ('下午行程', 'pm'), ('晚餐', 'meal'), ('夜間行程', 'night')]
+# Cards to show staff. Traditional for us, Simplified (via OpenCC) for them.
+PHRASES = [
+    ('人數', '我們三位，兩個大人一個小孩'),
+    ('訂位', '我們有訂位，姓陳'),
+    ('兒童椅', '請給我們一張兒童椅，謝謝'),
+    ('不辣', '請不要放辣'),
+    ('小孩吃', '小孩要吃，請少油少鹽'),
+    ('打包', '請幫我們打包，謝謝'),
+    ('買單', '請幫我們買單'),
+    ('洗手間', '請問洗手間在哪裡？'),
+    ('等多久', '請問大概要等多久？'),
+    ('付款', '可以用支付寶或微信支付嗎？'),
+    ('孩子走失', '我們的孩子走失了，三歲男孩，請幫忙聯絡工作人員'),
+    ('身體不適', '小孩身體不舒服，請問附近有醫務室或醫院嗎？'),
+]
+# Checked against public sources on 2026-10-11 (see conversation notes).
+STORIES = {
+    '2026-10-14': '明天要去的上海迪士尼樂園在 2016 年 6 月 16 日開園，是中國內地第一座迪士尼樂園；今年 6 月剛滿十週年。',
+    '2026-10-15': '「瘋狂動物城」園區在 2023 年 12 月 20 日開幕，是全球第一個瘋狂動物城主題園區；「熱力追蹤」是中國內地第一個無軌乘騎設施。',
+    '2026-10-16': '豫園從 1559 年由潘允端動工，名字取「愉悅老親」，是蓋給父親養老的園林。下午登的東方明珠高 468 公尺，1994 到 2007 年間是中國與亞洲最高的建築。',
+    '2026-10-17': '放生橋始建於明代 1571 年，清嘉慶年間重建，全長 72 公尺，是上海現存最大、最長的五孔石拱橋。',
+    '2026-10-18': '上海野生動物園 1995 年開園，由上海市政府與國家林業部門合作興建，是中國第一座國家級野生動物園。',
+    '2026-10-19': '武康大樓是匈牙利建築師鄔達克 1924 年的作品，原名諾曼底公寓，因地塊只有 30 度夾角，大樓形似一艘船。下午經過的國際飯店也出自他手，1934 年落成、高 83.8 公尺，曾被譽為「遠東第一高樓」。',
+}
 INFO_BOXES = [('交通安排', '交通'), ('必須預約／確認', '預約與確認'), ('親子／休息', '親子與休息'),
               ('可取消項目', '可取消'), ('延誤處理', '延誤時')]
 
@@ -108,6 +133,7 @@ def build_data():
         days.append({
             'date': d.isoformat(), 'md': md, 'dow': row['星期'], 'theme': row['當日主題'],
             'short': short.get(row['日期'], row['當日主題'].split('、')[0]),
+            'story': STORIES.get(d.isoformat(), ''),
             'stay': lines(row['航班／住宿']), 'timeline': tl, 'bookings': bookings,
             'boxes': [{'title': label, 'items': lines(row.get(col, ''))} for col, label in INFO_BOXES
                       if lines(row.get(col, '')) and lines(row.get(col, '')) != ['無']],
@@ -145,6 +171,8 @@ def build_data():
 
     return {
         'sc': sc,
+        'fx': fetch_rate(),
+        'phrases': [{'label': k, 't': v, 's': t2s(v)} for k, v in PHRASES],
         'built': dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).strftime('%Y-%m-%d %H:%M'),
         'days': days,
         'flights': flights,
@@ -158,11 +186,32 @@ def build_data():
     }
 
 
+def fetch_rate():
+    """CNY→TWD rate for price hints; the page works without it."""
+    try:
+        with urllib.request.urlopen('https://open.er-api.com/v6/latest/CNY', timeout=10) as r:
+            data = json.load(r)
+        when = dt.datetime.fromtimestamp(data['time_last_update_unix'], dt.timezone(dt.timedelta(hours=8)))
+        return {'twd': round(data['rates']['TWD'], 3), 'date': f'{when.month}/{when.day}'}
+    except Exception as e:  # offline build: skip the hints
+        print(f'exchange rate unavailable ({e}); building without NT$ hints')
+        return None
+
+
 def encrypt(plaintext: bytes, password: str) -> dict:
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    salt, iv = os.urandom(16), os.urandom(12)
+    # The salt stays fixed across builds so phones that chose "remember" keep working
+    # after an update with the same password. The IV must be fresh every time.
+    salt_file = os.path.join(DATA, 'SALT')
+    if os.path.exists(salt_file):
+        salt = base64.b64decode(open(salt_file).read())
+    else:
+        salt = os.urandom(16)
+        with open(salt_file, 'w') as f:
+            f.write(base64.b64encode(salt).decode())
+    iv = os.urandom(12)
     key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=PBKDF2_ITERATIONS).derive(password.encode())
     ct = AESGCM(key).encrypt(iv, plaintext, None)
     b64 = lambda b: base64.b64encode(b).decode()

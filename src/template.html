@@ -367,6 +367,44 @@ html.big .aa{background:var(--fa);color:#F7EFE6}
 .tea-h{margin-top:10px;font-size:11px;letter-spacing:.3em;color:var(--ok)}
 .tea-d{border-color:var(--okbg)}
 .dest .dn svg{width:13px;height:13px;vertical-align:-2px}
+.mapbox summary>svg:first-child{width:15px;height:15px;color:var(--ln)}
+.mapbox .mp-h{font-family:var(--deco);font-size:11px;letter-spacing:.4em;color:var(--ln);text-align:center;margin:10px 0 4px}
+.mapbox .mp{margin:6px 10px 0}
+.mapbox .mp .in{padding:0;overflow:hidden}
+.dmap{width:100%;height:auto;display:block}
+.m-bg{fill:var(--card)}
+.m-park{fill:var(--fa);opacity:.16}
+.m-lake{fill:var(--fb);opacity:.55}
+.m-river{fill:none;stroke:var(--fb);stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+.m-canal{fill:none;stroke:var(--fb);stroke-width:1.3;opacity:.8}
+.m-r1,.m-r2,.m-r3,.m-r4{fill:none;stroke:var(--ln);stroke-linecap:round;stroke-linejoin:round}
+.m-r1{stroke-width:2.2;opacity:.55}.m-r2{stroke-width:1.4;opacity:.45}.m-r3{stroke-width:.9;opacity:.35}.m-r4{stroke-width:.5;opacity:.28}
+.m-rname{font-size:9px;fill:var(--fa);letter-spacing:.3em;text-anchor:middle;paint-order:stroke;stroke:var(--card);stroke-width:3px}
+.m-pin path{fill:var(--ln);stroke:var(--card);stroke-width:1.5}
+.m-stay path{fill:var(--fa);stroke:var(--card);stroke-width:1.5}
+.m-pin text,.m-stay text{font-size:11px;font-weight:700;text-anchor:middle;fill:#F7EFE6;font-family:var(--sans)}
+.m-stay text{font-family:var(--serif);font-size:10px}
+.mapbox .mp{cursor:zoom-in}
+.mzoom{position:fixed;inset:0;z-index:42;background:var(--bg);display:none;flex-direction:column}
+.mzoom.show{display:flex}
+.mzoom .bar{display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;border-bottom:1px solid var(--ln)}
+.mzoom .bar span{font-size:12px;letter-spacing:.2em;color:var(--ln)}
+.mzoom .sc{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
+.mzoom .sc svg{width:240vw;max-width:none;height:auto;display:block}
+.m-tea circle{fill:var(--card);stroke:var(--ok);stroke-width:1}.m-tea path{fill:none;stroke:var(--ok);stroke-width:1}
+.m-lead{stroke:var(--ln);stroke-width:.8;opacity:.7}.m-dot{fill:var(--ln)}
+.m-scale path{stroke:var(--ln);fill:none}.m-scale text,.m-north text{font-size:8px;fill:var(--ink2);text-anchor:middle}
+.m-north path{fill:none;stroke:var(--ln)}
+.mlegend{list-style:none;margin:10px 14px 0;padding:0;font-size:13px}
+.mlegend li{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed var(--ln2)}
+.mlegend li:last-child{border:0}
+.mlegend i{font-style:normal;width:22px;height:22px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;background:var(--ln);color:#F7EFE6;font-family:var(--sans);font-weight:700;font-size:11px;
+  clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+.mlegend i.lstay{background:var(--fa);font-family:var(--serif);font-weight:400;font-size:11px}
+.mlegend .t{font-family:var(--deco);color:var(--ln);min-width:40px}
+.mlegend small{margin-left:auto;font-size:10.5px;color:var(--ink2)}
+.munpin{margin:8px 14px 0;font-size:11.5px;color:var(--ink2)}
+.mbtn{display:flex;justify-content:center;padding:12px 0 14px}
 .pager{display:flex;justify-content:space-between;padding:6px 16px 0}
 .entries{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:22px 16px 0}
 .entry{display:flex;flex-direction:column;align-items:center;gap:7px;background:none;border:0;cursor:pointer;color:var(--ink);font-size:12px;letter-spacing:.12em;padding:0}
@@ -472,6 +510,7 @@ footer{padding-bottom:30px}
 <div class="tools" id="tools" hidden><button class="aa chf" id="aa" type="button" aria-label="切換大字">大</button><button class="theme chf" id="theme" type="button" aria-label="切換日夜配色"></button></div>
 <main id="app" class="wrap" hidden></main>
 <nav class="bar" id="nav" hidden><div class="wrap"></div></nav>
+<div class="mzoom" id="mzoom" role="dialog" aria-modal="true" aria-label="放大地圖"><div class="bar"><span>拖曳查看 · 地圖資料 © OpenStreetMap</span><button class="btn chf ghost" type="button" data-mclose>關閉</button></div><div class="sc"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="ov" id="driver" role="dialog" aria-modal="true" aria-label="全螢幕出示卡"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="bd" data-close></div><div class="pn"><button class="grab" type="button" data-close aria-label="關閉"></button><div class="body"></div></div></div>
@@ -836,7 +875,19 @@ function dayHTML(D, d, i, N, food) {
   var pager = '<div class="pager">' + (i > 0 ? '<a class="btn chf ghost" href="#d' + i + '">← D' + i + '</a>' : '<span></span>') +
     (i < D.days.length - 1 ? '<a class="btn chf ghost" href="#d' + (i + 2) + '">D' + (i + 2) + ' →</a>' : '<span></span>') + '</div>';
   var drive = night >= 0 ? '<div class="drive"><button class="btn chf ghost" type="button" data-driver="' + night + '">' + ICON.car + '給司機看：' + esc(D.hotels[night]['飯店名稱'].replace(/（.*）/, '')) + '</button></div>' : '';
+  var M = d.map, mapBox = '';
+  if (M) {
+    var roman = ['I', 'II', 'III', 'IV'];
+    mapBox = '<details class="box mapbox"><summary>' + ICON.map + '<b>今日地圖</b><span class="ct">' + M.legend.length + ' 處</span>' + ICON.down + '</summary>' +
+      M.panels.map(function (p, k) { return (M.panels.length > 1 ? '<div class="mp-h">MAP ' + roman[k] + '</div>' : '') + '<div class="mp frame chf"><div class="in chf">' + p.svg + '</div></div>'; }).join('') +
+      '<ol class="mlegend">' + M.legend.map(function (l) {
+        return '<li><i class="' + (l.mark === '宿' ? 'lstay' : '') + '">' + esc(l.mark) + '</i><span class="t">' + esc(l.mark === '宿' ? '住宿' : l.t) + '</span>' + esc(l.name) + (l.approx ? '<small>約略位置</small>' : '') + '</li>';
+      }).join('') + '</ol>' +
+      (M.unpinned.length ? '<div class="munpin">分店未定，未標示：' + M.unpinned.map(esc).join('、') + '</div>' : '') +
+      '<div class="mbtn"><a class="btn chf" href="' + esc(M.amap) + '" target="_blank" rel="noopener">' + ICON.map + '在高德開啟整天地圖</a></div><div class="munpin" style="text-align:center;margin-bottom:12px">點地圖可放大 · 地圖資料 © OpenStreetMap 貢獻者</div></details>';
+  }
   return '<section class="day" data-day="' + i + '" hidden>' + dayHead(d, i) + '<div class="stay">' + esc(stay) + '</div>' + drive + todo +
+    (mapBox ? '<div class="boxes" style="padding-top:12px">' + mapBox + '</div>' : '') +
     '<ol class="tl">' + tl + '</ol>' + cta + '<div class="boxes">' + boxes + '</div>' + story +
     '<div class="dend">' + chevronRule() + '</div>' + pager + '</section>';
 }
@@ -1090,6 +1141,15 @@ function render(D) {
     if (t.closest('[data-close]')) return closeSheet();
     var b = t.closest('[data-driver]');
     if (b) return driverCard(D.hotels[+b.dataset.driver]);
+    var mp = t.closest('.mp');
+    if (mp) {
+      var z = $('#mzoom'), sc = $('.sc', z);
+      sc.innerHTML = mp.querySelector('svg').outerHTML;
+      z.classList.add('show');
+      sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2; sc.scrollTop = (sc.scrollHeight - sc.clientHeight) / 2;
+      return;
+    }
+    if (t.closest('[data-mclose]')) return $('#mzoom').classList.remove('show');
     var ds = t.closest('[data-dest]');
     if (ds) return destCard(DESTS[+ds.dataset.dest]);
     var cp = t.closest('[data-copy]');

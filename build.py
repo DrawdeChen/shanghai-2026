@@ -200,6 +200,7 @@ def build_data():
 
     flights = records('03_航班與交通')
     hotels = records('04_住宿比較')
+    add_maps(days, hotels, t2s)
 
     # Disney day route: key/value header block, timed rows, then rules.
     rows = load('11_迪士尼當日路線')
@@ -239,6 +240,50 @@ def build_data():
         'todos': todos,
         'budget': records('07_預算與支出'),
     }
+
+
+def add_maps(days, hotels, t2s):
+    """Attach per-day street maps (see tools/daymap.py); places come from data/geo.json."""
+    sys.path.insert(0, os.path.join(ROOT, 'tools'))
+    import daymap
+    geo_path = os.path.join(DATA, 'geo.json')
+    geo = json.load(open(geo_path, encoding='utf-8')) if os.path.exists(geo_path) else {}
+    for d in days:
+        stay = next((h for h in hotels if h['入住日期'] <= d['date'] < h['退房日期']), None)             or next((h for h in hotels if h['退房日期'] == d['date']), None)
+        points, legend, unpinned, seen, n = [], [], [], set(), 0
+
+        def add(name, mark, when, label=None):
+            g = geo.get(name)
+            if not g:
+                return False
+            seen.add(name)
+            points.append({'lat': g['lat'], 'lon': g['lon'], 'mark': mark, 's': t2s(label or name)})
+            if mark != 'tea':
+                legend.append({'mark': mark, 't': when, 'name': label or name, 'approx': bool(g.get('approx'))})
+            return True
+
+        if stay:
+            add(stay['飯店名稱'], '宿', '', re.sub(r'（.*）', '', stay['飯店名稱']))
+        if '迪士尼' in d['theme']:
+            n += 1
+            add('上海迪士尼樂園', str(n), '整天')
+        for it in d['timeline']:
+            for p in it.get('dests', []):
+                if p['name'] in seen or p['name'] in unpinned:
+                    continue
+                if p['name'] in geo:
+                    n += 1
+                    add(p['name'], str(n), it['t'][:5])
+                else:
+                    unpinned.append(p['name'])
+            for p in it.get('tea', [])[:1]:
+                if p['name'] not in seen:
+                    add(p['name'], 'tea', it['t'][:5])
+        if len(points) < 2:
+            continue
+        stops = [p for p in points if p['mark'] != 'tea']
+        d['map'] = {'panels': daymap.day_panels(points), 'legend': legend, 'unpinned': unpinned,
+                    'amap': daymap.amap_markers(stops)}
 
 
 def fetch_rate():

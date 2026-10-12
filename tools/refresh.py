@@ -9,7 +9,7 @@ SHEETS = list(dict.fromkeys(_h.unescape(n) for n in re.findall(r'name: "([^"]+)"
 print('tabs:', SHEETS)
 total = 0
 for s in SHEETS:
-    url = f'https://docs.google.com/spreadsheets/d/{ID}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote(s)}'
+    url = f'https://docs.google.com/spreadsheets/d/{ID}/gviz/tq?tqx=out:csv&headers=1&sheet={urllib.parse.quote(s)}'
     new = urllib.request.urlopen(url).read().decode('utf-8')
     if new.lstrip().startswith('<'):
         print(s, 'FAILED (not CSV, sharing off?)'); continue

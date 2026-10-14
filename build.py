@@ -200,6 +200,7 @@ def build_data():
             'date': d.isoformat(), 'md': md, 'dow': row['星期'], 'theme': row['當日主題'],
             'short': short.get(row['日期'], row['當日主題'].split('、')[0]),
             'story': STORIES.get(d.isoformat(), ''),
+            'stroller': (re.search(r'【推車：(.+?)】', row.get('親子／休息', '')) or [None, ''])[1],
             'stay': lines(row['航班／住宿']), 'timeline': tl, 'bookings': bookings,
             'boxes': [{'title': label, 'items': lines(row.get(col, ''))} for col, label in INFO_BOXES
                       if lines(row.get(col, '')) and lines(row.get(col, '')) != ['無']],
